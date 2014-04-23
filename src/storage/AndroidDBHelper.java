@@ -65,6 +65,7 @@ public class AndroidDBHelper implements DBHelperAPI {
 	 * 
 	 */
 	private void init() {
+		context.deleteDatabase("timeline.db"); //because.
 		open();
 		try {
 			database.execSQL("CREATE TABLE timeline_info (" + ID
@@ -123,15 +124,17 @@ public class AndroidDBHelper implements DBHelperAPI {
 	@Override
 	public Timeline[] getTimelines() { // this could probably be split up into
 										// methods
+		System.out.println("GETTIMELINESCALLED");
 		open();
 		try {
 			Cursor results = database
 					.rawQuery("SELECT name from sqlite_master WHERE type = \"table\" "
 							+ "and name != \"sqlite_sequence\" and name != \"timeline_info\" and name != \"timeline_categories\" "
-							+ "and name != \"timeline_icons\";", new String[]{});
+							+ "and name != \"timeline_icons\" and name != \"android_metadata\";", new String[]{});
 			results.moveToFirst();
 			ArrayList<String> timelineNames = new ArrayList<String>();
 			int numTimelines = 0;
+			System.out.println(results.getColumnCount());
 			while (!results.isAfterLast()) { // Get all timeline names
 				numTimelines++;
 				timelineNames.add(results.getString(0));
@@ -144,7 +147,7 @@ public class AndroidDBHelper implements DBHelperAPI {
 						+ timelineNames.get(j) + ";", null);
 				results.moveToFirst();
 				ArrayList<TLEvent> events = new ArrayList<TLEvent>();
-				while (results.moveToNext()) { // Get all events for the event
+				while (!results.isAfterLast()) { // Get all events for the event
 					String name = results.getString(results.getColumnIndex("eventName"));
 					String type = results.getString(results.getColumnIndex("type"));
 					TLEvent event = null;
@@ -194,47 +197,46 @@ public class AndroidDBHelper implements DBHelperAPI {
 
 	@Override
 	public boolean saveTimeline(Timeline timeline) {
-//		String tlName = timeline.getName();
-//		open();
-//		try {
-//			statement
-//					.executeUpdate("CREATE TABLE "
-//							+ tlName
-//							+ " ("
-//							+ ID
-//							+ ",eventName TEXT, type TEXT, startDate DATETIME, endDate DATETIME, "
-//							+ "category TEXT, icon INTEGER, description TEXT);");
-//			writeTimelineInfo(timeline);
-//			setTimelineID(timeline);
-//			
-//		} catch (SQLException e) {
-//			if (e.getMessage().contains("already exists")) {
-//				System.out.println("A timeline with that name already exists!");
-//				close();
-//				return false;
-//			}
-//			e.printStackTrace();
-//		}
-//		close();
-//	
-//		if (timeline.getEvents() == null) {
-//			return true; // did not save any events, timeline still created
-//		}
-//		open();
-//		for (TLEvent event : timeline.getEvents()) {
-//			try {
-//				if (event instanceof Atomic) {
-//					writeEvent((Atomic) event, tlName);
-//				} else if (event instanceof Duration) {
-//					writeEvent((Duration) event, tlName);
-//				}
-//			} catch (SQLException e) {
-//				e.printStackTrace();
-//			} catch (NullPointerException e) {
-//				System.out.println("Nothing!");
-//			}
-//		}
-//		close();
+		String tlName = timeline.getName();
+		open();
+		try {
+			database.execSQL("CREATE TABLE "
+							+ tlName
+							+ " ("
+							+ ID
+							+ ",eventName TEXT, type TEXT, startDate DATETIME, endDate DATETIME, "
+							+ "category TEXT, icon INTEGER, description TEXT);");
+			writeTimelineInfo(timeline);
+			setTimelineID(timeline);
+			
+		} catch (SQLException e) {
+			if (e.getMessage().contains("already exists")) {
+				System.out.println("A timeline with that name already exists!");
+				close();
+				return false;
+			}
+			e.printStackTrace();
+		}
+		close();
+	
+		if (timeline.getEvents() == null) {
+			return true; // did not save any events, timeline still created
+		}
+		open();
+		for (TLEvent event : timeline.getEvents()) {
+			try {
+				if (event instanceof Atomic) {
+					writeEvent((Atomic) event, tlName);
+				} else if (event instanceof Duration) {
+					writeEvent((Duration) event, tlName);
+				}
+			} catch (SQLException e) {
+				e.printStackTrace();
+			} catch (NullPointerException e) {
+				System.out.println("Nothing!");
+			}
+		}
+		close();
 		return true;
 	}
 
@@ -305,27 +307,27 @@ public class AndroidDBHelper implements DBHelperAPI {
 //		pstmt.execute();
 //	}
 
-//	/**
-//	 * Uses prepared statements to insert the timelineName and axisLabel into
-//	 * the timeline_info table
-//	 * 
-//	 * @param timelineName
-//	 *            the timeline of the axisLabel to write
-//	 * @param axisLabel
-//	 *            the axisLabel enum value
-//	 * @throws SQLException
-//	 *             because there are databases
-//	 */
-//	private void writeTimelineInfo(Timeline timeline) throws SQLException {
-//		String INSERT_LABEL = "INSERT INTO timeline_info (timelineName, axisLabel, backgroundColor, axisColor) VALUES "
-//				+ "(?,?,?,?);";
-//		PreparedStatement pstmt = connection.prepareStatement(INSERT_LABEL);
-//		pstmt.setString(1, timeline.getName());
-//		pstmt.setString(2, timeline.getAxisLabel().name());
-//		pstmt.setString(3, timeline.getColorBG()+"");
-//		pstmt.setString(4, timeline.getColorTL()+"");
-//		pstmt.executeUpdate();
-//	}
+	/**
+	 * Uses prepared statements to insert the timelineName and axisLabel into
+	 * the timeline_info table
+	 * 
+	 * @param timelineName
+	 *            the timeline of the axisLabel to write
+	 * @param axisLabel
+	 *            the axisLabel enum value
+	 * @throws SQLException
+	 *             because there are databases
+	 */
+	private void writeTimelineInfo(Timeline timeline) throws SQLException {
+		String INSERT_LABEL = "INSERT INTO timeline_info (timelineName, axisLabel, backgroundColor, axisColor) VALUES "
+				+ "(?,?,?,?);";
+		SQLiteStatement stmt = database.compileStatement(INSERT_LABEL);
+		stmt.bindString(1, timeline.getName());
+		stmt.bindString(2, timeline.getAxisLabel().name());
+		stmt.bindString(3, timeline.getColorBG()+"");
+		stmt.bindString(4, timeline.getColorTL()+"");
+		stmt.executeInsert();
+	}
 
 //	/**
 //	 * Syncs the database to this timeline's info. Uses id to access the
@@ -377,7 +379,6 @@ public class AndroidDBHelper implements DBHelperAPI {
 		String SELECT_LABEL = "SELECT _id FROM timeline_info WHERE timelineName = ?;";
 		Cursor c = database.rawQuery(SELECT_LABEL, new String[] {timeline.getName()});
 		c.moveToFirst();
-		System.out.println("SETID COLUMN COUNT "+c.getCount());
 		int id = c.getInt(0);
 		timeline.setID(id);
 	}

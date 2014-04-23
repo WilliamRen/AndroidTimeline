@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
 
 		database = new AndroidDBHelper(getBaseContext());
 		
-		timelines = new ArrayList<Timeline>(Arrays.asList(database.getTimelines()));
+		//timelines = new ArrayList<Timeline>(Arrays.asList(database.getTimelines()));
 		timelineNames = new ArrayList<String>();
 
 		for(Timeline t : timelines)
